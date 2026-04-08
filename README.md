@@ -35,8 +35,8 @@ A Streamlit in Snowflake (SiS) app for monitoring and controlling costs across a
 
 | Credit Type | Default Rate | Applies To |
 |-------------|-------------|------------|
-| Standard credit | $3.40 | AI Functions, Cortex Analyst, Cortex Search |
-| AI credit | $2.00 (global) | Cortex Code, Snowflake Intelligence, Cortex Agents |
+| Standard credit | $3.40 | AI Functions, Cortex Analyst, Cortex Search, Adjust it as per your edition |
+| AI credit | $2.00 (global) | Cortex Code, Snowflake Intelligence, Cortex Agents, $2.2 for Regional |
 
 Both rates are configurable via sidebar sliders.
 
