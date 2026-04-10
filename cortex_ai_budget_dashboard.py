@@ -329,7 +329,7 @@ with tab_summary:
     with st.container(border=True):
         st.subheader("Credits breakdown")
         svc_data["Cost (USD)"] = svc_data["Service"].map(SERVICE_COST_RATES).fillna(COST_PER_CREDIT) * svc_data["Credits"]
-        svc_data["Share (%)"] = (svc_data["Credits"] / svc_data["Credits"].sum() * 100).round(1)
+        svc_data["Share (%)"] = ((svc_data["Credits"] / svc_data["Credits"].sum() * 100).round(1))/100
         st.dataframe(
             svc_data,
             column_config={
