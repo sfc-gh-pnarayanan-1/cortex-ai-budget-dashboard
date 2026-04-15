@@ -18,12 +18,18 @@ A Streamlit in Snowflake (SiS) app for monitoring and controlling costs across a
 | **CoCo Snowsight** | `CORTEX_CODE_SNOWSIGHT_USAGE_HISTORY` | Credits, tokens, by user |
 | **Long-running LLM** | `CORTEX_AI_FUNCTIONS_USAGE_HISTORY` | Multi-window query detection, duration distribution |
 
-### Cost Controls (1 tab, 2 sections)
+### Cost Controls (1 tab, 3 sections)
 
 **AI Functions Cost Control**
 - Account-level monthly spending alerts (notification integration + hourly alert)
 - Per-user monthly spending limits (RBAC-based access control with hourly enforcement)
 - Runaway query detection and cancellation (auto-cancel + email alert)
+
+**Cortex Code Cost Control**
+- View current account-level and per-user daily credit limits
+- Set account-level defaults (`CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER`, `CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER`)
+- Set per-user overrides (always takes precedence over account default)
+- Remove per-user overrides to revert to account default
 
 **Cortex Agent Resource Budgets**
 - Tag creation and application to Cortex Agent objects
