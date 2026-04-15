@@ -329,7 +329,7 @@ with tab_summary:
     with st.container(border=True):
         st.subheader("Credits breakdown")
         svc_data["Cost (USD)"] = svc_data["Service"].map(SERVICE_COST_RATES).fillna(COST_PER_CREDIT) * svc_data["Credits"]
-        svc_data["Share (%)"] = ((svc_data["Credits"] / svc_data["Credits"].sum() * 100).round(1))/100
+        svc_data["Share (%)"] = ((svc_data["Cost (USD)"] / svc_data["Cost (USD)"].sum() * 100).round(1))/100
         st.dataframe(
             svc_data,
             column_config={
@@ -580,9 +580,13 @@ with tab_long:
 
 
 with tab_controls:
+    @st.cache_data(ttl=600)
+    def load_user_list():
+        return [r[0] for r in session.sql("SHOW USERS").collect() if r[0]]
+
     ctrl_section = st.segmented_control(
         "Cost control area",
-        ["AI Functions Cost Control", "Cortex Agent Resource Budgets"],
+        ["AI Functions Cost Control", "Cortex Code Cost Control", "Cortex Agent Resource Budgets"],
         default="AI Functions Cost Control",
     )
 
@@ -948,6 +952,148 @@ ALTER TASK MONITOR_RUNAWAY_AI_QUERIES RESUME;"""
                             st.dataframe(result, hide_index=True, use_container_width=True)
                     except Exception as e:
                         st.error(f"Error: {e}. Ensure the procedure exists (run Generate SQL first).")
+
+    elif ctrl_section == "Cortex Code Cost Control":
+        st.header("Cortex Code Cost Control")
+        st.caption(
+            "Set daily estimated credit limits per user for Cortex Code CLI and Snowsight. "
+            "Account-level defaults apply to all users; per-user overrides take precedence. Requires ACCOUNTADMIN. "
+            "Based on [Snowflake documentation](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-code-cost-controls)."
+        )
+
+        coco_sub = st.radio(
+            "Select action",
+            ["View current limits", "Set account-level defaults", "Set per-user override", "Remove per-user override"],
+            horizontal=True,
+            key="coco_sub",
+        )
+
+        if coco_sub == "View current limits":
+            with st.container(border=True):
+                st.subheader("Account-level defaults")
+                if st.button("Fetch account defaults", key="fetch_acct_defaults"):
+                    try:
+                        cli_df = session.sql(
+                            "SHOW PARAMETERS LIKE 'CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER' IN ACCOUNT"
+                        ).to_pandas()
+                        ss_df = session.sql(
+                            "SHOW PARAMETERS LIKE 'CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER' IN ACCOUNT"
+                        ).to_pandas()
+                        combined = pd.concat([cli_df, ss_df], ignore_index=True)
+                        combined.columns = combined.columns.str.lower()
+                        if combined.empty:
+                            st.info("No account-level CoCo limits found.")
+                        else:
+                            show_cols = [c for c in ["key", "value", "default", "level", "description"] if c in combined.columns]
+                            st.dataframe(
+                                combined[show_cols] if show_cols else combined,
+                                hide_index=True, use_container_width=True,
+                            )
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+            with st.container(border=True):
+                st.subheader("Per-user overrides")
+                coco_check_user = st.selectbox("Username to check", load_user_list(), index=None, placeholder="Select a user", key="coco_check_user")
+                if st.button("Fetch user limits", key="fetch_user_limits") and coco_check_user:
+                    try:
+                        cli_u = session.sql(
+                            f"SHOW PARAMETERS LIKE 'CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER' FOR USER {coco_check_user}"
+                        ).to_pandas()
+                        ss_u = session.sql(
+                            f"SHOW PARAMETERS LIKE 'CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER' FOR USER {coco_check_user}"
+                        ).to_pandas()
+                        combined_u = pd.concat([cli_u, ss_u], ignore_index=True)
+                        combined_u.columns = combined_u.columns.str.lower()
+                        if combined_u.empty:
+                            st.info(f"No CoCo limits found for {coco_check_user}.")
+                        else:
+                            show_cols_u = [c for c in ["key", "value", "default", "level", "description"] if c in combined_u.columns]
+                            st.dataframe(
+                                combined_u[show_cols_u] if show_cols_u else combined_u,
+                                hide_index=True, use_container_width=True,
+                            )
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+        elif coco_sub == "Set account-level defaults":
+            with st.container(border=True):
+                st.subheader("Set account-level daily credit limits")
+                st.caption(
+                    "These defaults apply to **all users** who do not have a per-user override. "
+                    "Set to 0 to block all CoCo usage by default."
+                )
+                col_cc1, col_cc2 = st.columns(2)
+                with col_cc1:
+                    acct_cli_limit = st.number_input(
+                        "CLI daily credit limit", min_value=-1, value=1, step=1, key="acct_cli_lim",
+                        help="CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER (-1 = no limit, 0 = disabled)",
+                    )
+                with col_cc2:
+                    acct_ss_limit = st.number_input(
+                        "Snowsight daily credit limit", min_value=-1, value=1, step=1, key="acct_ss_lim",
+                        help="CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER (-1 = no limit, 0 = disabled)",
+                    )
+
+                sql_acct = f"""ALTER ACCOUNT SET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(acct_cli_limit)};
+ALTER ACCOUNT SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(acct_ss_limit)};"""
+                st.code(sql_acct, language="sql")
+                if st.button("Apply account defaults", key="exec_acct_coco"):
+                    try:
+                        session.sql(f"ALTER ACCOUNT SET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(acct_cli_limit)}").collect()
+                        session.sql(f"ALTER ACCOUNT SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(acct_ss_limit)}").collect()
+                        st.success(f"Account defaults set: CLI = {int(acct_cli_limit)}, Snowsight = {int(acct_ss_limit)} credits/day/user.")
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+
+        elif coco_sub == "Set per-user override":
+            with st.container(border=True):
+                st.subheader("Set per-user daily credit override")
+                st.caption(
+                    "User-level overrides **always take precedence** over account-level defaults. "
+                    "Use this to give power users higher limits or restrict specific users."
+                )
+                coco_user = st.selectbox("Username", load_user_list(), index=None, placeholder="Select a user", key="coco_override_user")
+                col_cu1, col_cu2 = st.columns(2)
+                with col_cu1:
+                    user_cli_limit = st.number_input(
+                        "CLI daily credit limit", min_value=-1, value=1, step=1, key="user_cli_lim",
+                    )
+                with col_cu2:
+                    user_ss_limit = st.number_input(
+                        "Snowsight daily credit limit", min_value=-1, value=1, step=1, key="user_ss_lim",
+                    )
+
+                if coco_user:
+                    sql_user_override = f"""ALTER USER {coco_user} SET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(user_cli_limit)};
+ALTER USER {coco_user} SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(user_ss_limit)};"""
+                    st.code(sql_user_override, language="sql")
+                    if st.button("Apply user override", key="exec_user_coco"):
+                        try:
+                            session.sql(f"ALTER USER {coco_user} SET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(user_cli_limit)}").collect()
+                            session.sql(f"ALTER USER {coco_user} SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(user_ss_limit)}").collect()
+                            st.success(f"Override set for {coco_user}: CLI = {int(user_cli_limit)}, Snowsight = {int(user_ss_limit)} credits/day.")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
+
+        else:
+            with st.container(border=True):
+                st.subheader("Remove per-user override")
+                st.caption(
+                    "Unsetting a user-level parameter reverts the user to the account-level default."
+                )
+                coco_unset_user = st.selectbox("Username", load_user_list(), index=None, placeholder="Select a user", key="coco_unset_user")
+                if coco_unset_user:
+                    sql_unset = f"""ALTER USER {coco_unset_user} UNSET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER;
+ALTER USER {coco_unset_user} UNSET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER;"""
+                    st.code(sql_unset, language="sql")
+                    if st.button("Remove override", key="exec_unset_coco"):
+                        try:
+                            session.sql(f"ALTER USER {coco_unset_user} UNSET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER").collect()
+                            session.sql(f"ALTER USER {coco_unset_user} UNSET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER").collect()
+                            st.success(f"Override removed for {coco_unset_user}. Account defaults now apply.")
+                        except Exception as e:
+                            st.error(f"Error: {e}")
 
     else:
         st.header("Cortex Agent Resource Budgets")
