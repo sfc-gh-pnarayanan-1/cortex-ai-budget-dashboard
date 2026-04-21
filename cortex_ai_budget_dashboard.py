@@ -21,14 +21,14 @@ with st.sidebar:
     )
     st.divider()
     st.header("Cost rates")
-    COST_PER_CREDIT = st.slider(
+    COST_PER_CREDIT = st.number_input(
         "$/credit (AI Functions, Analyst, Search)",
-        min_value=0.50, max_value=10.00, value=3.40, step=0.10, format="$%.2f",
+        min_value=0.01, max_value=100.00, value=3.40, step=0.10, format="%.2f",
         help="Standard Snowflake credit price for AI Functions, Cortex Analyst, and Cortex Search",
     )
-    COST_PER_AI_CREDIT = st.slider(
+    COST_PER_AI_CREDIT = st.number_input(
         "$/AI credit (CoCo, SI, Agents)",
-        min_value=0.50, max_value=10.00, value=2.00, step=0.10, format="$%.2f",
+        min_value=0.01, max_value=100.00, value=2.00, step=0.10, format="%.2f",
         help="AI credit price for Cortex Code, Snowflake Intelligence, and Cortex Agents (global: $2.00, regional: $2.20)",
     )
 
