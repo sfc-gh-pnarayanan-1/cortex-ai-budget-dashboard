@@ -43,9 +43,10 @@ SERVICE_COST_RATES = {
 }
 
 
-@st.cache_data(ttl=600)
-def load_ai_functions(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_ai_functions(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         WITH base AS (
             SELECT
                 C.START_TIME, C.END_TIME, C.FUNCTION_NAME, C.MODEL_NAME,
@@ -70,9 +71,10 @@ def load_ai_functions(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_analyst(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_analyst(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT START_TIME, END_TIME, USERNAME, CREDITS, REQUEST_COUNT
         FROM SNOWFLAKE.ACCOUNT_USAGE.CORTEX_ANALYST_USAGE_HISTORY
         WHERE DATE(START_TIME) >= '{date_str}'
@@ -80,9 +82,10 @@ def load_analyst(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_search(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_search(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT START_TIME, END_TIME, DATABASE_NAME, SCHEMA_NAME, SERVICE_NAME, CREDITS
         FROM SNOWFLAKE.ACCOUNT_USAGE.CORTEX_SEARCH_SERVING_USAGE_HISTORY
         WHERE DATE(START_TIME) >= '{date_str}'
@@ -90,9 +93,10 @@ def load_search(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_intelligence(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_intelligence(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT
             START_TIME, END_TIME, USER_NAME AS USERNAME,
             SNOWFLAKE_INTELLIGENCE_NAME, AGENT_DATABASE_NAME, AGENT_SCHEMA_NAME, AGENT_NAME,
@@ -103,9 +107,10 @@ def load_intelligence(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_agents(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_agents(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT
             START_TIME, END_TIME, USER_NAME AS USERNAME,
             AGENT_DATABASE_NAME, AGENT_SCHEMA_NAME, AGENT_NAME,
@@ -116,9 +121,10 @@ def load_agents(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_coco_cli(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_coco_cli(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT
             C.USER_ID, U.NAME AS USERNAME, C.REQUEST_ID,
             C.USAGE_TIME AS START_TIME, C.TOKEN_CREDITS AS CREDITS, C.TOKENS
@@ -129,9 +135,10 @@ def load_coco_cli(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_coco_snowsight(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_coco_snowsight(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT
             C.USER_ID, U.NAME AS USERNAME, C.REQUEST_ID,
             C.USAGE_TIME AS START_TIME, C.TOKEN_CREDITS AS CREDITS, C.TOKENS
@@ -142,9 +149,10 @@ def load_coco_snowsight(date_str):
     """).to_pandas()
 
 
-@st.cache_data(ttl=600)
-def load_long_running(date_str):
-    return session.sql(f"""
+@st.cache_data(ttl=600, show_spinner=False)
+def load_long_running(date_str, _session=None):
+    s = _session or session
+    return s.sql(f"""
         SELECT
             C.QUERY_ID, C.FUNCTION_NAME, C.MODEL_NAME,
             U.NAME AS USERNAME,
@@ -162,14 +170,14 @@ def load_long_running(date_str):
     """).to_pandas()
 
 
-df_llm = load_ai_functions(date_str)
-df_analyst = load_analyst(date_str)
-df_search = load_search(date_str)
-df_intelligence = load_intelligence(date_str)
-df_agents = load_agents(date_str)
-df_coco = load_coco_cli(date_str)
-df_coco_ss = load_coco_snowsight(date_str)
-df_lr = load_long_running(date_str)
+df_llm = load_ai_functions(date_str, _session=session)
+df_analyst = load_analyst(date_str, _session=session)
+df_search = load_search(date_str, _session=session)
+df_intelligence = load_intelligence(date_str, _session=session)
+df_agents = load_agents(date_str, _session=session)
+df_coco = load_coco_cli(date_str, _session=session)
+df_coco_ss = load_coco_snowsight(date_str, _session=session)
+df_lr = load_long_running(date_str, _session=session)
 
 tab_summary, tab_llm, tab_analyst, tab_search, tab_intelligence, tab_agents, tab_coco, tab_coco_ss, tab_long, tab_controls = st.tabs([
     ":material/dashboard: Cost summary",
@@ -580,10 +588,6 @@ with tab_long:
 
 
 with tab_controls:
-    @st.cache_data(ttl=600)
-    def load_user_list():
-        return [r[0] for r in session.sql("SHOW USERS").collect() if r[0]]
-
     ctrl_section = st.segmented_control(
         "Cost control area",
         ["AI Functions Cost Control", "Cortex Code Cost Control", "Cortex Agent Resource Budgets"],
@@ -994,7 +998,7 @@ ALTER TASK MONITOR_RUNAWAY_AI_QUERIES RESUME;"""
 
             with st.container(border=True):
                 st.subheader("Per-user overrides")
-                coco_check_user = st.selectbox("Username to check", load_user_list(), index=None, placeholder="Select a user", key="coco_check_user")
+                coco_check_user = st.text_input("Username to check", key="coco_check_user", placeholder="e.g. JSMITH")
                 if st.button("Fetch user limits", key="fetch_user_limits") and coco_check_user:
                     try:
                         cli_u = session.sql(
@@ -1053,7 +1057,7 @@ ALTER ACCOUNT SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER = {int(a
                     "User-level overrides **always take precedence** over account-level defaults. "
                     "Use this to give power users higher limits or restrict specific users."
                 )
-                coco_user = st.selectbox("Username", load_user_list(), index=None, placeholder="Select a user", key="coco_override_user")
+                coco_user = st.text_input("Username", key="coco_override_user", placeholder="e.g. JSMITH")
                 col_cu1, col_cu2 = st.columns(2)
                 with col_cu1:
                     user_cli_limit = st.number_input(
@@ -1082,7 +1086,7 @@ ALTER USER {coco_user} SET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER
                 st.caption(
                     "Unsetting a user-level parameter reverts the user to the account-level default."
                 )
-                coco_unset_user = st.selectbox("Username", load_user_list(), index=None, placeholder="Select a user", key="coco_unset_user")
+                coco_unset_user = st.text_input("Username", key="coco_unset_user", placeholder="e.g. JSMITH")
                 if coco_unset_user:
                     sql_unset = f"""ALTER USER {coco_unset_user} UNSET CORTEX_CODE_CLI_DAILY_EST_CREDIT_LIMIT_PER_USER;
 ALTER USER {coco_unset_user} UNSET CORTEX_CODE_SNOWSIGHT_DAILY_EST_CREDIT_LIMIT_PER_USER;"""
