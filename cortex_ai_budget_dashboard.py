@@ -198,7 +198,8 @@ def safe_credits(frame, col="CREDITS"):
 
 
 def render_service_tab(frame, credit_col="CREDITS", token_col=None, user_col="USERNAME",
-                       detail_cols=None, title="", cost_rate=None):
+                       detail_cols=None, title="", cost_rate=None,
+                       extra_summaries=None):
     if frame.empty:
         st.info(f"No {title} usage found for the selected period.")
         return
@@ -238,7 +239,28 @@ def render_service_tab(frame, credit_col="CREDITS", token_col=None, user_col="US
                 by_user = by_user.sort_values("Credits", ascending=False)
                 st.bar_chart(by_user, x="User", y="Credits", horizontal=True)
 
-    view = st.segmented_control(f"View ({title})", ["Summary by day", "Raw data"], default="Summary by day")
+    if extra_summaries:
+        extra_charts = [(s_display, s_col) for s_label, s_col, s_display in extra_summaries if s_col != user_col]
+        if extra_charts:
+            extra_cols = st.columns(len(extra_charts))
+            for i, (s_display, s_col) in enumerate(extra_charts):
+                with extra_cols[i]:
+                    with st.container(border=True):
+                        st.subheader(f"Credits by {s_display.lower()}")
+                        by_grp = frame.groupby(s_col)[credit_col].sum().reset_index()
+                        by_grp.columns = [s_display, "Credits"]
+                        by_grp = by_grp.sort_values("Credits", ascending=False)
+                        st.bar_chart(by_grp, x=s_display, y="Credits", horizontal=True)
+
+    view_options = ["Summary by day"]
+    summary_map = {}
+    if extra_summaries:
+        for s_label, s_col, s_display in extra_summaries:
+            view_options.append(s_label)
+            summary_map[s_label] = (s_col, s_display)
+    view_options.append("Raw data")
+
+    view = st.segmented_control(f"View ({title})", view_options, default="Summary by day")
     if view == "Summary by day":
         agg = {"Credits": (credit_col, "sum")}
         if token_col and token_col in frame.columns:
@@ -250,7 +272,19 @@ def render_service_tab(frame, credit_col="CREDITS", token_col=None, user_col="US
             column_config={"Credits": st.column_config.NumberColumn(format="%.6f")},
             hide_index=True, use_container_width=True,
         )
-    else:
+    elif view in summary_map:
+        s_col, s_display = summary_map[view]
+        agg = {"Credits": (credit_col, "sum")}
+        if token_col and token_col in frame.columns:
+            agg["Tokens"] = (token_col, "sum")
+        summary = frame.groupby(s_col).agg(**agg).reset_index()
+        summary.rename(columns={s_col: s_display}, inplace=True)
+        st.dataframe(
+            summary.sort_values("Credits", ascending=False),
+            column_config={"Credits": st.column_config.NumberColumn(format="%.6f")},
+            hide_index=True, use_container_width=True,
+        )
+    elif view == "Raw data":
         show_cols = detail_cols or [c for c in frame.columns if c != "DATE"]
         st.dataframe(
             frame[show_cols].sort_values("START_TIME", ascending=False),
@@ -449,6 +483,7 @@ with tab_analyst:
         df_analyst, credit_col="CREDITS", user_col="USERNAME",
         detail_cols=["START_TIME", "USERNAME", "CREDITS", "REQUEST_COUNT"],
         title="Cortex Analyst",
+        extra_summaries=[("Summary by user", "USERNAME", "User")],
     )
 
 
@@ -481,11 +516,17 @@ with tab_search:
                 by_svc = by_svc.sort_values("Credits", ascending=False)
                 st.bar_chart(by_svc, x="Service", y="Credits", horizontal=True)
 
-        view = st.segmented_control("Search view", ["Summary by day", "Raw data"], default="Summary by day")
+        view = st.segmented_control("Search view", ["Summary by day", "Summary by service", "Raw data"], default="Summary by day")
         if view == "Summary by day":
             summary = df_s.groupby("DATE").agg(Credits=("CREDITS", "sum")).reset_index()
             summary.columns = ["Date", "Credits"]
             st.dataframe(summary.sort_values("Date", ascending=False),
+                         column_config={"Credits": st.column_config.NumberColumn(format="%.6f")},
+                         hide_index=True, use_container_width=True)
+        elif view == "Summary by service":
+            summary = df_s.groupby("SERVICE_NAME").agg(Credits=("CREDITS", "sum")).reset_index()
+            summary.columns = ["Service", "Credits"]
+            st.dataframe(summary.sort_values("Credits", ascending=False),
                          column_config={"Credits": st.column_config.NumberColumn(format="%.6f")},
                          hide_index=True, use_container_width=True)
         else:
@@ -499,6 +540,7 @@ with tab_intelligence:
         df_intelligence, credit_col="CREDITS", token_col="TOKENS", user_col="USERNAME",
         detail_cols=["START_TIME", "USERNAME", "SNOWFLAKE_INTELLIGENCE_NAME", "AGENT_NAME", "CREDITS", "TOKENS"],
         title="Intelligence",
+        extra_summaries=[("Summary by user", "USERNAME", "User")],
     )
 
 
@@ -507,6 +549,10 @@ with tab_agents:
         df_agents, credit_col="CREDITS", token_col="TOKENS", user_col="USERNAME",
         detail_cols=["START_TIME", "USERNAME", "AGENT_DATABASE_NAME", "AGENT_SCHEMA_NAME", "AGENT_NAME", "CREDITS", "TOKENS"],
         title="Cortex Agents",
+        extra_summaries=[
+            ("Summary by agent", "AGENT_NAME", "Agent"),
+            ("Summary by user", "USERNAME", "User"),
+        ],
     )
 
 
@@ -515,6 +561,7 @@ with tab_coco:
         df_coco, credit_col="CREDITS", token_col="TOKENS", user_col="USERNAME",
         detail_cols=["START_TIME", "USERNAME", "REQUEST_ID", "CREDITS", "TOKENS"],
         title="Cortex Code CLI",
+        extra_summaries=[("Summary by user", "USERNAME", "User")],
     )
 
 
@@ -523,6 +570,7 @@ with tab_coco_ss:
         df_coco_ss, credit_col="CREDITS", token_col="TOKENS", user_col="USERNAME",
         detail_cols=["START_TIME", "USERNAME", "REQUEST_ID", "CREDITS", "TOKENS"],
         title="Cortex Code Snowsight",
+        extra_summaries=[("Summary by user", "USERNAME", "User")],
     )
 
 
