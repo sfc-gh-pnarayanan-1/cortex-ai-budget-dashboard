@@ -78,3 +78,21 @@ The `METERING_HISTORY` view contains an `AI_SERVICES` service type bucket that *
 | **User column** | `USER_ID` only — requires `LEFT JOIN` to `SNOWFLAKE.ACCOUNT_USAGE.USERS` to resolve usernames |
 
 REST API credits are small in volume for most accounts but may be significant for customers using the Cortex Inference REST API programmatically at scale.
+
+**Screenshots**
+
+<img width="1580" height="807" alt="image" src="https://github.com/user-attachments/assets/2c691b2c-e133-4843-a195-f41fab4f21f9" />
+
+<img width="1567" height="746" alt="image" src="https://github.com/user-attachments/assets/a5da283e-1806-4bb6-b998-98eba047d224" />
+
+<img width="1592" height="653" alt="image" src="https://github.com/user-attachments/assets/ce03a712-3d82-4975-a93b-689538f6027a" />
+
+<img width="1575" height="791" alt="image" src="https://github.com/user-attachments/assets/17b36cd7-6cad-4329-ac84-e5a0c220478c" />
+
+<img width="1577" height="733" alt="image" src="https://github.com/user-attachments/assets/c7663684-b024-4c1d-bb6a-207e2d8dc618" />
+
+
+
+
+
+
